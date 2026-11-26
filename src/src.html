@@ -68,6 +68,11 @@ header{display:flex;align-items:center;gap:8px;padding:10px 12px 2px}
 #btnHint.on{border-color:var(--acc);color:var(--acc)}
 .mode-normal #btnGuide,.mode-challenge #btnHint,.mode-challenge #btnScramble,.mode-challenge #btnUndo,.mode-challenge #btnReset,.mode-challenge #btnGuide{display:none}
 .mode-challenge.ch-wait #btnMenu{visibility:hidden}
+#btnGuideFab{position:absolute;left:14px;bottom:14px;z-index:2;height:46px;padding:0 16px 0 12px;border-radius:23px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:18px;display:none;align-items:center;gap:6px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+#btnGuideFab span{font-size:14px;font-weight:800}
+#btnGuideFab:active{transform:scale(.95)}
+.mode-tutorial:not(.gopen) #btnGuideFab{display:flex}
+.mode-tutorial:not(.gopen) .hintline{display:none}
 #btnHint{position:absolute;right:14px;bottom:14px;z-index:2;width:58px;height:58px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--text);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.45)}
 #btnHint svg{width:26px;height:26px}
 #btnHint:active{transform:scale(.94)}
@@ -222,6 +227,7 @@ header{position:relative}
     </div></div>
     <div id="countdown">3</div>
     <div id="toast"></div>
+    <button id="btnGuideFab" aria-label="공략 보기">📖<span>공략</span></button>
     <button id="btnHint" aria-label="힌트"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg><span id="hintBadge">3</span></button>
   </div>
 </div>
@@ -1239,6 +1245,7 @@ $('btnScramble').onclick=scramble;
 $('btnUndo').onclick=undo;
 $('btnHint').onclick=onHintBtn;
 $('btnGuide').onclick=()=>openGuide();
+$('btnGuideFab').onclick=()=>openGuide();
 $('btnReset').onclick=()=>{ if(busy()) return; closeModal(); resetIntro(); build(N); resetView(); if(mode==='tutorial') updateTutorialStage(); };
 $('btnGiveUp').onclick=()=>{ if(state==='running') giveUp(); };
 

@@ -7,7 +7,8 @@
     "contentInset": "never",
     "backgroundColor": "#13151b",
     "scrollEnabled": false,
-    "limitsNavigationsToAppBoundDomains": false
+    "limitsNavigationsToAppBoundDomains": false,
+    "allowsLinkPreview": false
   },
   "android": {
     "backgroundColor": "#13151b"

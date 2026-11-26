@@ -8,7 +8,8 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
 :root{--bg:#13151b;--panel:#1d2028;--panel2:#262a34;--line:#2b2f3a;--text:#eef0f4;--sub:#8e96a6;--acc:#ffb020;--banner:50px;--sb:env(safe-area-inset-bottom)}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;overflow:hidden;overscroll-behavior:none;user-select:none;-webkit-user-select:none}
 button{font-family:inherit;cursor:pointer}
 .screen{position:fixed;left:0;right:0;top:0;bottom:calc(var(--banner) + var(--sb));display:none;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);background:radial-gradient(120% 70% at 50% 40%,#232734 0%,var(--bg) 70%)}
@@ -892,6 +893,10 @@ function selectLayer(axis,layer){
 }
 function canPlay(){ return !zoomAnim&&!spin&&state!=='scrambling'&&state!=='done'&&!(mode==='challenge'&&state!=='running'); }
 
+// iOS WebView: 터치 기본 동작을 막아야 길게 끌 때 확대경이 뜨지 않는다 (포인터 이벤트는 그대로 온다)
+['touchstart','touchmove'].forEach(t=>stage.addEventListener(t,e=>{ if(!e.target.closest('button')) e.preventDefault(); },{passive:false}));
+document.addEventListener('selectstart',e=>{ if(!e.target.closest||!e.target.closest('input')) e.preventDefault(); });
+document.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('pointerdown',e=>{
   if(drag) return;
   canvas.setPointerCapture(e.pointerId);

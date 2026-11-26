@@ -1,4 +1,4 @@
-// web/ → app/www/ 로 복사하고 앱용 설정을 넣는다.
+// game/ → app/www/ 로 복사하고 앱용 설정을 넣는다. (web/은 웹 사이트 = 앱 다운로드 안내)
 // - js/config.js: 챌린지 서버, 앱 표시(APP=true), 약관 링크 주소(SITE)
 // - js/cap.js: Capacitor 플러그인 묶음 (src/native.js)
 import fs from 'node:fs';
@@ -7,11 +7,11 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const web = path.join(root, '..', 'web');
+const game = path.join(root, '..', 'game');
 const www = path.join(root, 'www');
 
 fs.rmSync(www, { recursive: true, force: true });
-fs.cpSync(web, www, { recursive: true, filter: (src) => !/[\\/](CNAME|app-ads\.txt)$/.test(src) });
+fs.cpSync(game, www, { recursive: true });
 
 const API_BASE = process.env.API_BASE || 'https://api.ohsangplay.com/cube';
 fs.writeFileSync(

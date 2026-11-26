@@ -2,7 +2,7 @@
   "name": "cube-app",
   "private": true,
   "version": "1.0.0",
-  "description": "틈틈이 큐브 앱 (Capacitor). web/을 앱 안에 묶는다.",
+  "description": "틈틈이 큐브 앱 (Capacitor). game/(게임 화면)을 앱 안에 묶는다.",
   "type": "module",
   "scripts": {
     "build:web": "node scripts/build-web.mjs",

@@ -1,5 +1,9 @@
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
-W,H=1179,2556
+import sys
+W,H=(1080,1920) if 'play' in sys.argv else (1179,2556)
+OUT='/tmp/shots/play' if 'play' in sys.argv else '/tmp/shots/out'
+import os; os.makedirs(OUT,exist_ok=True)
+S=W/1179
 FONT='/usr/share/fonts/opentype/noto/NotoSansCJK-Black.ttc'
 FONT_B='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
 KR=1  # ttc 안의 한국어(KR) 글꼴 번호
@@ -30,17 +34,17 @@ def rounded(im,r):
 for i,(f,l1,l2,sub) in enumerate(items,1):
     canvas=bg()
     d=ImageDraw.Draw(canvas)
-    f1=font(FONT,96); f2=font(FONT,96); f3=font(FONT_B,44)
-    y=150
+    f1=font(FONT,int(96*S)); f2=font(FONT,int(96*S)); f3=font(FONT_B,int(44*S))
+    y=int(150*S) if H>2000 else 110
     for text,fnt,col in ((l1,f1,(238,240,244)),(l2,f2,ACC)):
-        w=d.textlength(text,font=fnt); d.text(((W-w)/2,y),text,font=fnt,fill=col); y+=128
-    w=d.textlength(sub,font=f3); d.text(((W-w)/2,y+18),sub,font=f3,fill=(150,158,174))
+        w=d.textlength(text,font=fnt); d.text(((W-w)/2,y),text,font=fnt,fill=col); y+=int(128*S)
+    w=d.textlength(sub,font=f3); d.text(((W-w)/2,y+int(18*S)),sub,font=f3,fill=(150,158,174))
     # 화면 (기기 테두리 느낌)
     shot=Image.open('/tmp/shots/'+f).convert('RGB')
-    sw=int(W*0.80); sh=int(shot.size[1]*sw/shot.size[0])
+    sw=int(W*(0.80 if H>2000 else 0.74)); sh=int(shot.size[1]*sw/shot.size[0])
     shot=shot.resize((sw,sh),Image.LANCZOS)
-    top=y+130
-    frame_pad=18
+    top=y+int(130*S)
+    frame_pad=int(18*S)
     fw,fh=sw+frame_pad*2,sh+frame_pad*2
     fx=(W-fw)//2
     # 그림자
@@ -53,5 +57,5 @@ for i,(f,l1,l2,sub) in enumerate(items,1):
     canvas.paste(inner,(fx+3,top+3),inner)
     s2=rounded(shot,92)
     canvas.paste(s2,(fx+frame_pad,top+frame_pad),s2)
-    canvas.save(f'/tmp/shots/out/{i:02d}.png')
+    canvas.save(f'{OUT}/{i:02d}.png')
 print('done')

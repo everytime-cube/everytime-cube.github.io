@@ -504,7 +504,7 @@ function afterScramble(){
   history=[]; moveCount=0;
   if(mode==='challenge'){ introEnd(runCountdown); return; }
   state='ready'; refreshStatus(); updateTutorialStage(); updateHud();
-  introEnd(()=>{ if(mode==='tutorial'&&pendingGuide){ pendingGuide=false; openGuide(); } });
+  introEnd(()=>{ if(mode==='tutorial'&&pendingGuide){ pendingGuide=false; if(curStage<8) gStep=curStage; openGuide(); } });
 }
 function scramble(){
   if(busy()) return;
@@ -560,6 +560,7 @@ function tickTimer(now){
 function refreshStatus(){
   if(hs) return;
   if(mode==='challenge'&&state==='running'){ setStatus(sel?'고른 줄을 손으로 밀어서 돌리세요':'블록을 눌러 줄을 고르세요'); return; }
+  if(mode==='challenge'&&state==='idle'){ setStatus(''); return; }
   if(state==='scrambling') setStatus('섞는 중…');
   else if(state==='done') setStatus('완성했어요! 🎉');
   else if(sel) setStatus('줄을 손가락으로 밀어서 돌리세요 · 같은 블록 다시 누르면 방향 전환');
@@ -1220,6 +1221,7 @@ $('gClose').onclick=closeGuide;
 // ---------- 화면 전환 ----------
 const TITLES={tutorial:'튜토리얼',normal:'일반',challenge:'오늘의 챌린지'};
 function enterMode(m){
+  if(hs) stopHint(); clearToast();
   mode=m;
   $('home').classList.remove('show'); $('app').classList.add('show');
   $('app').className='screen show mode-'+m;
@@ -1234,7 +1236,9 @@ function enterMode(m){
   setTimeout(resize,30);
   if(m!=='challenge') setTimeout(()=>{ if(mode===m&&$('app').classList.contains('show')) scramble(); },220);
 }
+function clearToast(){ stickyMsg=''; clearTimeout(toastTimer); toastTimer=null; $('toast').className=''; }
 function goHome(){
+  if(hs) stopHint(); clearToast();
   closeMenu(); closeGuide(); closeModal(); resetIntro(); clearInterval(cdTimer); $('countdown').classList.remove('show'); pendingGuide=false;
   $('app').classList.remove('show'); $('home').classList.add('show');
   build(3); updateHomeCh(); refreshCh();

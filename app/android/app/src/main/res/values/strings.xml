@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">틈틈이 큐브</string>
+    <string name="title_activity_main">틈틈이 큐브</string>
+    <string name="package_name">com.ohsang.play.cube</string>
+    <string name="custom_url_scheme">com.ohsang.play.cube</string>
+</resources>

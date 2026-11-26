@@ -1,0 +1,23 @@
+name = "cube-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# 서버 주소: https://api.ohsangplay.com/cube (오상플레이 공용 API 도메인을 앱마다 경로로 나눠 쓴다)
+# /cube는 src/routing.ts가 떼고 처리한다.
+routes = [
+  { pattern = "api.ohsangplay.com/cube/*", zone_name = "ohsangplay.com" },
+]
+workers_dev = true
+
+# 오늘의 챌린지: 날짜 하나당 Durable Object 하나 (도전 횟수·진행 중인 도전·기록을 SQLite에)
+[[durable_objects.bindings]]
+name = "DAILY"
+class_name = "CubeDaily"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CubeDaily"]
+
+[vars]
+# 서버를 쓸 수 있는 웹 주소. https://localhost(안드로이드 앱), capacitor://localhost(iOS 앱)
+ALLOWED_ORIGINS = "https://every-cube.ohsangplay.com,https://everytime-cube.github.io,http://localhost,http://127.0.0.1,https://localhost,capacitor://localhost"

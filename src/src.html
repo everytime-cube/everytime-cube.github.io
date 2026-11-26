@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>틈틈이 큐브</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
 :root{--bg:#13151b;--panel:#1d2028;--panel2:#262a34;--line:#2b2f3a;--text:#eef0f4;--sub:#8e96a6;--acc:#ffb020;--banner:50px;--sb:env(safe-area-inset-bottom)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -31,6 +33,8 @@ button{font-family:inherit;cursor:pointer}
 .mode.ch .ic{background:#ffb02022}
 .mode .tag{margin-left:auto;flex:none;font-size:11px;font-weight:800;color:#1b1300;background:var(--acc);padding:4px 8px;border-radius:99px}
 .mode .tag.off{background:var(--panel2);color:var(--sub)}
+.foot{margin-top:18px;font-size:11.5px;color:#5b6272}
+.foot a{color:#7b8394;text-decoration:none}
 .linkbtn{margin-top:16px;border:0;background:transparent;color:var(--acc);font-weight:700;font-size:14px;padding:8px}
 
 /* 게임 화면 */
@@ -178,6 +182,7 @@ header{position:relative}
     <button class="mode ch" data-mode="challenge"><span class="ic">🏆</span><span><b>오늘의 챌린지</b><small id="homeCh">모두 같은 큐브 · 하루 한 번 · 도움 없이</small></span><span class="tag" id="homeChTag">도전 1</span></button>
   </div>
   <button class="linkbtn" id="btnRankHome">오늘 랭킹 보기 →</button>
+  <div class="foot" id="homeFoot"><a href="privacy.html" data-page="privacy.html">개인정보처리방침</a> · <a href="terms.html" data-page="terms.html">이용약관</a></div>
 </div>
 
 <!-- 게임 -->
@@ -231,6 +236,7 @@ header{position:relative}
 <div id="modal"><div class="card" id="modalCard"></div></div>
 <div id="banner">광고 배너 자리 (320×50)</div>
 
+<!--CONFIG-->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>/*ENGINE*/</script>
 <script>
@@ -472,7 +478,8 @@ function onMoveDone(m){
   if(m.kind==='scramble'){ if(!queue.length) afterScramble(); return; }
   const q=Math.abs(m.dir);
   if(m.kind==='user'){
-    moveCount+=q;
+    moveCount+=q; appHaptic('turn');
+    if(mode==='challenge'&&state==='running') chMoves.push({axis:m.axis,layer:m.layer,dir:m.dir});
     if(state==='ready'){ state='running'; tStart=performance.now(); }
   } else if(m.kind==='undo'){
     moveCount=Math.max(0,moveCount-q);
@@ -763,23 +770,105 @@ function updateTutorialStage(){
 }
 let curStage=8;
 
-// ---------- 광고 (미리보기용 가짜) ----------
+// ---------- 실행 환경 ----------
+// 웹·앱: js/config.js가 CUBE_CONFIG(API_BASE 등)를 넣는다. 미리보기(설정 없음): 서버 없이 이 기기에만 저장.
+// 앱: js/cap.js가 CubeNative(AdMob·진동·뒤로가기 등)를 넣는다.
+const CFG=window.CUBE_CONFIG||{};
+const SERVER=!!CFG.API_BASE;
+const NATIVE=window.CubeNative&&window.CubeNative.isNative?window.CubeNative:null;
+const ADS=NATIVE?'native':(SERVER?'none':'fake');   // 웹 사이트엔 광고 없음, 미리보기는 가짜 광고
+if(ADS==='none') document.documentElement.style.setProperty('--banner','0px');
+if(ADS==='native'){ $('banner').textContent=''; $('banner').style.borderTop='0'; }
+if(ADS==='none') $('banner').style.display='none';
+
+function deviceId(){
+  let id=store.get('device','');
+  if(!/^[A-Za-z0-9-]{8,64}$/.test(id)){
+    id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('d'+Date.now().toString(36)+Math.random().toString(36).slice(2,12));
+    store.set('device',id);
+  }
+  return id;
+}
+
+// ---------- 광고 ----------
+const adState={ready:false,loaded:{},loading:{},busy:false};
+function adUnit(kind){ if(!NATIVE) return ''; const a=NATIVE.ads||{}; return kind==='challenge'?(a.rewardedChallenge||a.rewarded||''):(a.rewarded||''); }
+function isTestAd(id){ return !!(NATIVE&&NATIVE.ads.testing)||String(id).startsWith('ca-app-pub-3940256099942544/'); }
+function rewardAvailable(kind){ return ADS==='fake'||(ADS==='native'&&!!adUnit(kind)); }
 function fakeAd(onReward){
   let n=3;
   openModal(`<h2>광고</h2><div class="adbox"><b id="adN">${n}</b>보상형 광고 자리 (미리보기)</div><p>앱에서는 실제 광고가 재생돼요</p>`,[]);
   const t=setInterval(()=>{ n--; const el=$('adN'); if(el) el.textContent=n; if(n<=0){ clearInterval(t); closeModal(); onReward(); } },1000);
 }
+function loadReward(kind){
+  const id=adUnit(kind);
+  if(!adState.ready||adState.loaded[id]||adState.loading[id]||!id) return;
+  adState.loading[id]=true;
+  NATIVE.AdMob.prepareRewardVideoAd({adId:id,isTesting:isTestAd(id)})
+    .then(()=>{ adState.loading[id]=false; adState.loaded[id]=true; },()=>{ adState.loading[id]=false; setTimeout(()=>loadReward(kind),60000); });
+}
+/** 보상형 광고를 끝까지 보면 onReward() */
+function showRewarded(kind,onReward){
+  if(ADS==='fake'){ fakeAd(onReward); return; }
+  if(ADS!=='native') return;
+  const id=adUnit(kind);
+  if(adState.busy) return;
+  if(!adState.ready||!adState.loaded[id]){ toast('광고를 불러오는 중이에요. 잠시 뒤 다시 눌러 주세요',{info:true}); loadReward(kind); return; }
+  const {AdMob,RewardAdPluginEvents:E}=NATIVE;
+  let rewarded=false; const handles=[];
+  adState.busy=true; adState.loaded[id]=false;
+  const done=()=>{
+    if(!adState.busy) return;
+    adState.busy=false;
+    handles.forEach(h=>h.then(x=>x.remove()).catch(()=>{}));
+    setTimeout(()=>{ loadReward('hint'); loadReward('challenge'); },1000);
+    if(rewarded) onReward();
+  };
+  handles.push(AdMob.addListener(E.Rewarded,()=>{ rewarded=true; }));
+  handles.push(AdMob.addListener(E.Dismissed,done));
+  handles.push(AdMob.addListener(E.FailedToShow,done));
+  AdMob.showRewardVideoAd().then(()=>{ rewarded=true; },()=>done());
+}
+async function askTracking(){
+  if(NATIVE.platform!=='ios') return;
+  let status='notDetermined';
+  try{ ({status}=await NATIVE.AdMob.trackingAuthorizationStatus()); }catch(e){ return; }
+  if(status!=='notDetermined') return;
+  await new Promise(res=>openModal('<h2>광고 안내</h2><p>틈틈이 큐브는 광고로 무료로 운영돼요.<br>다음 화면에서 허용하면 관심 있을 만한 광고가 나와요. 허용하지 않아도 게임은 똑같이 할 수 있어요.</p>',[{t:'계속',primary:true,fn:res}]));
+  await NATIVE.AdMob.requestTrackingAuthorization().catch(()=>{});
+}
+async function startAppAds(){
+  const {AdMob}=NATIVE;
+  try{
+    const info=await AdMob.requestConsentInfo();
+    if(info.isConsentFormAvailable&&info.status==='REQUIRED') await AdMob.showConsentForm();
+  }catch(e){}
+  await askTracking();
+  try{ await AdMob.initialize({initializeForTesting:NATIVE.ads.testing}); }catch(e){ return; }
+  adState.ready=true;
+  if(NATIVE.ads.banner){
+    AdMob.showBanner({adId:NATIVE.ads.banner,adSize:'BANNER',position:'BOTTOM_CENTER',margin:0,isTesting:isTestAd(NATIVE.ads.banner)}).catch(()=>{});
+  }
+  loadReward('hint'); loadReward('challenge');
+}
+
+// ---------- 힌트 충전 ----------
 function adCooldownLeft(){ const at=store.get('ad-hint-at',0); return Math.max(0,at+AD_COOLDOWN-Date.now()); }
 function askHintAd(){
   const left=adCooldownLeft();
+  const free=ADS==='none';   // 웹 사이트: 광고 없이 3분마다 무료 충전
+  const unit=free?'3분마다 힌트 3개를 받을 수 있어요':'광고는 3분마다 볼 수 있어요';
   if(left>0){
     const s=Math.ceil(left/1000);
-    openModal(`<h2>힌트를 다 썼어요</h2><p>광고는 3분마다 볼 수 있어요.<br>다음 광고까지 <b style="color:var(--text)">${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}</b></p>`,[{t:'확인',primary:true}]);
+    openModal(`<h2>힌트를 다 썼어요</h2><p>${unit}.<br>다음 충전까지 <b style="color:var(--text)">${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}</b></p>`,[{t:'확인',primary:true}]);
     return;
   }
-  openModal(`<h2>힌트를 다 썼어요</h2><p>광고를 보면 힌트 3개를 더 받을 수 있어요.<br>(광고는 3분마다 볼 수 있어요)</p>`,[
+  const give=()=>{ store.set('ad-hint-at',Date.now()); hintsLeft+=3; updateHintBtn(); toast('힌트 3개를 받았어요!'); };
+  if(free){ openModal(`<h2>힌트를 다 썼어요</h2><p>${unit}.</p>`,[{t:'닫기'},{t:'힌트 +3 받기',primary:true,fn:give}]); return; }
+  if(!rewardAvailable('hint')){ openModal('<h2>힌트를 다 썼어요</h2><p>이번 판은 힌트 없이 도전해 보세요!</p>',[{t:'확인',primary:true}]); return; }
+  openModal(`<h2>힌트를 다 썼어요</h2><p>광고를 보면 힌트 3개를 더 받을 수 있어요.<br>(${unit})</p>`,[
     {t:'닫기'},
-    {t:'📺 광고 보고 힌트 +3',primary:true,fn:()=>fakeAd(()=>{ store.set('ad-hint-at',Date.now()); hintsLeft+=3; updateHintBtn(); setStatus('힌트 3개를 받았어요!'); })}
+    {t:'📺 광고 보고 힌트 +3',primary:true,fn:()=>showRewarded('hint',give)}
   ]);
 }
 
@@ -791,9 +880,10 @@ function openModal(html,btns){
 }
 function closeModal(){ $('modal').classList.remove('show'); }
 
+
 // ---------- 완성 ----------
 function finish(){
-  state='done'; tEnd=performance.now();
+  state='done'; tEnd=performance.now(); appHaptic('done');
   hs=null; sel=null; hl.visible=false; updateHintBtn();
   const t=tEnd-tStart;
   refreshStatus(); updateHud();
@@ -810,19 +900,16 @@ function finish(){
     [{t:'닫기'},{t:'다시 섞기',primary:true,fn:scramble}]),250);
 }
 
+
 // ---------- 오늘의 챌린지 ----------
+// 서버 모드: api.ohsangplay.com/cube 가 도전 횟수·섞기·기록 검증·랭킹을 맡는다.
+// 미리보기 모드(설정 없음): 같은 규칙을 이 기기 저장소로 흉내 낸다.
 function kstDate(){ const d=new Date(Date.now()+9*3600e3); return d.toISOString().slice(0,10); }
-function challengeInfo(){
-  const ymd=kstDate(), key=ymd.replace(/-/g,'');
-  const no=Math.floor((Date.parse(ymd)-Date.parse('2026-11-24'))/864e5)+1;
-  const a=store.get('ch-'+key,{used:0,bonus:false});
-  const [y,m,d]=ymd.split('-').map(Number);
-  return {ymd,key,no,used:a.used,bonus:a.bonus,max:1+(a.bonus?1:0),left:1+(a.bonus?1:0)-a.used,label:m+'월 '+d+'일'};
-}
-function saveAttempts(c){ store.set('ch-'+c.key,{used:c.used,bonus:c.bonus}); }
+function dayLabel(day){ const [y,m,d]=day.split('-').map(Number); return m+'월 '+d+'일'; }
+function dayNo(day){ return Math.floor((Date.parse(day)-Date.parse('2026-11-24'))/864e5)+1; }
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
-function dailyScramble(key){
-  const rnd=mulberry32(+key*2654435761%4294967296), out=[]; let prev=null;
+function dailyScramble(day){
+  const rnd=mulberry32(+day.replace(/-/g,'')*2654435761%4294967296), out=[]; let prev=null;
   for(let i=0;i<25;i++){
     let m;
     do{ m={axis:AXES[rnd()*3|0],layer:rnd()<0.5?-1:1,dir:rnd()<0.5?1:-1}; if(rnd()<0.2) m.dir=2; }
@@ -831,34 +918,104 @@ function dailyScramble(key){
   }
   return out;
 }
-function rankingOf(key){
-  const list=store.get('rank-'+key,[]);
-  return list.slice().sort((a,b)=>a.t-b.t||a.moves-b.moves||a.at-b.at);
+async function api(path,body){
+  const url=CFG.API_BASE.replace(/\/+$/,'')+path;
+  let res;
+  try{
+    res=await fetch(url,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
+  }catch(e){ throw new Error('서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요'); }
+  let data={}; try{ data=await res.json(); }catch(e){}
+  if(!res.ok) throw new Error(data.error||'잠시 후 다시 시도해 주세요');
+  return data;
 }
-function myBestToday(){ const c=challengeInfo(); const mine=store.get('mine-'+c.key,[]); const r=rankingOf(c.key).filter(x=>mine.includes(x.id)); return r[0]||null; }
+const localCh={
+  key(){ return kstDate(); },
+  att(){ return store.get('ch-'+this.key(),{used:0,bonus:false}); },
+  records(day){ return store.get('rank-'+day,[]).slice().sort((a,b)=>a.ms-b.ms||a.moves-b.moves||a.at-b.at); },
+  async status(){
+    const day=this.key(), a=this.att(), max=1+(a.bonus?1:0), recs=this.records(day);
+    const i=recs.findIndex(r=>r.me);
+    return {day,no:dayNo(day),used:a.used,bonus:a.bonus,max,left:Math.max(0,max-a.used),best:i>=0?{...recs[i],rank:i+1}:null};
+  },
+  async start(){
+    const day=this.key(), a=this.att();
+    if(a.used>=1+(a.bonus?1:0)) throw new Error('오늘 도전을 모두 썼어요');
+    a.used++; store.set('ch-'+day,a);
+    return {runId:day+'.local',scramble:dailyScramble(day)};
+  },
+  async bonus(){ const a=this.att(); a.bonus=true; store.set('ch-'+this.key(),a); return this.status(); },
+  async giveUp(){},
+  async submit({runId,name,ms,moves}){
+    const day=runId.split('.')[0], count=moves.reduce((n,m)=>n+Math.abs(m[2]),0);
+    const list=store.get('rank-'+day,[]);
+    const prev=list.find(r=>r.me);
+    const improved=!prev||ms<prev.ms||(ms===prev.ms&&count<prev.moves);
+    if(improved){ const keep=list.filter(r=>!r.me); keep.push({name,ms,moves:count,at:Date.now(),me:true}); store.set('rank-'+day,keep); }
+    const recs=this.records(day);
+    return {rank:recs.findIndex(r=>r.me)+1,total:recs.length,improved,moves:count};
+  },
+  async ranking(){
+    const day=this.key(), recs=this.records(day);
+    const top=recs.slice(0,50).map((r,i)=>({rank:i+1,name:r.name,ms:r.ms,moves:r.moves,me:!!r.me}));
+    const i=recs.findIndex(r=>r.me);
+    return {day,top,me:i>=0?{...recs[i],rank:i+1}:null,total:recs.length};
+  },
+};
+const serverCh={
+  async status(){ const r=await api('/api/challenge/today?device='+encodeURIComponent(deviceId())); return r; },
+  async start(){ return api('/api/challenge/start',{device:deviceId()}); },
+  async bonus(){ return api('/api/challenge/bonus',{device:deviceId()}); },
+  async giveUp(){ return api('/api/challenge/giveup',{device:deviceId()}).catch(()=>{}); },
+  async submit(p){ return api('/api/challenge/submit',{device:deviceId(),...p}); },
+  async ranking(){ return api('/api/challenge/ranking?device='+encodeURIComponent(deviceId())); },
+};
+const CH=SERVER?serverCh:localCh;
+let chStatus=null, chRun=null, chMoves=[], chLoading=false;
+
+async function refreshCh(){
+  try{ chStatus=await CH.status(); chStatus.no=chStatus.no||dayNo(chStatus.day); }
+  catch(e){ chStatus={error:e.message}; }
+  renderChallengePanel(); updateHomeCh(); updateHud();
+  return chStatus;
+}
 function renderChallengePanel(){
-  const c=challengeInfo(); chToday=c;
-  $('chNo').textContent='#'+c.no+' · '+c.ymd.replace(/-/g,'.');
-  $('chDate').textContent=c.label+' 챌린지';
-  $('chLeft').innerHTML=c.left>0?`남은 도전 <b>${c.left}</b>회`:'오늘 도전을 모두 썼어요';
-  $('btnChStart').disabled=c.left<=0;
-  $('btnChStart').textContent=c.left>0?'시작하기':'내일 다시 도전하세요';
-  $('btnChAd').style.display=(c.left<=0&&!c.bonus)?'block':'none';
-  updateHomeCh();
+  const c=chStatus;
+  const startBtn=$('btnChStart'), adBtn=$('btnChAd');
+  if(!c||chLoading){ $('chNo').textContent=''; $('chDate').textContent='오늘의 챌린지'; $('chLeft').textContent='불러오는 중…'; startBtn.disabled=true; adBtn.style.display='none'; return; }
+  if(c.error){ $('chNo').textContent=''; $('chDate').textContent='오늘의 챌린지'; $('chLeft').textContent=c.error; startBtn.disabled=false; startBtn.textContent='다시 시도'; adBtn.style.display='none'; return; }
+  $('chNo').textContent='#'+c.no+' · '+c.day.replace(/-/g,'.');
+  $('chDate').textContent=dayLabel(c.day)+' 챌린지';
+  $('chLeft').innerHTML=(c.left>0?`남은 도전 <b>${c.left}</b>회`:'오늘 도전을 모두 썼어요')+(c.best?`<br>내 기록 <b>${fmt(c.best.ms)}</b> · ${c.best.moves}수 · ${c.best.rank}위`:'');
+  startBtn.disabled=c.left<=0;
+  startBtn.textContent=c.left>0?'시작하기':'내일 다시 도전하세요';
+  const canBonus=c.left<=0&&!c.bonus&&rewardAvailable('challenge');
+  adBtn.style.display=canBonus?'block':'none';
 }
 function updateHomeCh(){
-  const c=challengeInfo(), best=myBestToday();
-  $('homeCh').innerHTML='모두 같은 큐브 · 하루 한 번 · 도움 없이'+(best?`<br>오늘 내 기록 ${fmt(best.t)} (${best.moves}수)`:'');
-  $('homeChTag').textContent=c.left>0?'도전 '+c.left:'완료';
-  $('homeChTag').classList.toggle('off',c.left<=0);
+  const c=chStatus;
+  const best=c&&!c.error?c.best:null;
+  $('homeCh').innerHTML='모두 같은 큐브 · 하루 한 번 · 도움 없이'+(best?`<br>오늘 내 기록 ${fmt(best.ms)} (${best.moves}수 · ${best.rank}위)`:'');
+  const left=c&&!c.error?c.left:null;
+  $('homeChTag').textContent=left==null?'오늘':(left>0?'도전 '+left:'완료');
+  $('homeChTag').classList.toggle('off',left===0);
 }
-function startChallenge(){
-  const c=challengeInfo(); if(c.left<=0||busy()) return;
-  c.used++; saveAttempts(c);
+function myBestToday(){ return chStatus&&!chStatus.error&&chStatus.best?{t:chStatus.best.ms}:null; }
+async function startChallenge(){
+  if(busy()||chLoading) return;
+  if(!chStatus||chStatus.error){ chLoading=true; renderChallengePanel(); chLoading=false; await refreshCh(); return; }
+  if(chStatus.left<=0) return;
+  chLoading=true; renderChallengePanel();
+  let r;
+  try{ r=await CH.start(); }
+  catch(e){ chLoading=false; toast(e.message,{info:true,ms:3200}); await refreshCh(); return; }
+  chLoading=false;
+  chRun={runId:r.runId}; chMoves=[];
+  if(r.status) chStatus={...r.status,no:r.no||chStatus.no}; else if(chStatus) { chStatus.used++; chStatus.left--; }
+  updateHomeCh();
   build(3); resetView(); introStart();
   $('app').classList.remove('ch-wait');
   state='scrambling'; setStatus('오늘의 큐브를 섞는 중…');
-  dailyScramble(c.key).forEach(m=>queue.push({...m,kind:'scramble',dur:105}));
+  r.scramble.forEach(m=>queue.push({...m,kind:'scramble',dur:105}));
 }
 let cdTimer=null;
 function runCountdown(){
@@ -870,30 +1027,39 @@ function runCountdown(){
     if(n>0){ cd.textContent=n; return; }
     if(n===0){ cd.textContent='GO!'; return; }
     clearInterval(cdTimer); cd.classList.remove('show');
-    state='running'; tStart=performance.now(); history=[]; moveCount=0;
+    state='running'; tStart=performance.now(); history=[]; moveCount=0; chMoves=[];
     updateHud(); refreshStatus();
   },650);
 }
 function giveUp(after){
   openModal('<h2>포기할까요?</h2><p>기록 없이 오늘 도전 1회가 사용된 걸로 남아요.</p>',[
     {t:'계속하기'},
-    {t:'포기',primary:true,fn:()=>{ build(3); enterChallengeWait(); if(after) after(); }}
+    {t:'포기',primary:true,fn:()=>{ CH.giveUp(); chRun=null; build(3); enterChallengeWait(); if(after) after(); }}
   ]);
 }
-function enterChallengeWait(){ $('app').classList.add('ch-wait'); state='idle'; renderChallengePanel(); updateHud(); setStatus(''); }
+function enterChallengeWait(){ $('app').classList.add('ch-wait'); state='idle'; renderChallengePanel(); updateHud(); setStatus(''); refreshCh(); }
 function challengeResult(t,moves){
-  const c=challengeInfo(), last=store.get('initials','');
-  openModal(`<h2>챌린지 완료! 🏆</h2><div class="bigt">${fmt(t)}</div><p>${moves}번 이동 · 랭킹에 올릴 이니셜(영문 3글자)</p>
-    <div class="ini"><input maxlength="1" id="i0"><input maxlength="1" id="i1"><input maxlength="1" id="i2"></div>`,
-    [{t:'등록하기',primary:true,keep:true,fn:()=>{
+  const last=store.get('initials',''), ms=Math.round(t);
+  const wire=chMoves.map(m=>[AXES.indexOf(m.axis),m.layer,m.dir]);
+  const run=chRun;
+  openModal(`<h2>챌린지 완료! 🏆</h2><div class="bigt">${fmt(ms)}</div><p>${moves}번 이동 · 랭킹에 올릴 이니셜(영문 3글자)</p>
+    <div class="ini"><input maxlength="1" id="i0" autocapitalize="characters" autocomplete="off"><input maxlength="1" id="i1" autocapitalize="characters" autocomplete="off"><input maxlength="1" id="i2" autocapitalize="characters" autocomplete="off"></div>
+    <p id="subErr" style="color:#ff7a6b;min-height:18px"></p>`,
+    [{t:'등록하기',primary:true,keep:true,fn:async()=>{
       const name=[0,1,2].map(i=>$('i'+i).value.toUpperCase()).join('');
-      if(!/^[A-Z]{3}$/.test(name)){ $('i0').focus(); return; }
+      if(!/^[A-Z]{3}$/.test(name)){ $('subErr').textContent='영문 3글자를 넣어 주세요'; $('i0').focus(); return; }
+      if(!run){ $('subErr').textContent='도전 정보가 없어요'; return; }
       store.set('initials',name);
-      const id=Date.now()+'-'+Math.random().toString(36).slice(2,7);
-      const list=store.get('rank-'+c.key,[]); list.push({id,name,t:Math.round(t),moves,at:Date.now()}); store.set('rank-'+c.key,list);
-      const mine=store.get('mine-'+c.key,[]); mine.push(id); store.set('mine-'+c.key,mine);
-      build(3); enterChallengeWait();
-      showRanking(id);
+      const btn=$('modalCard').querySelector('.btns button'); btn.disabled=true; btn.textContent='등록 중…';
+      try{
+        const r=await CH.submit({runId:run.runId,name,ms,moves:wire});
+        chRun=null;
+        build(3); enterChallengeWait();
+        showRanking({rank:r.rank,total:r.total,improved:r.improved});
+      }catch(e){
+        btn.disabled=false; btn.textContent='다시 등록하기';
+        $('subErr').textContent=e.message;
+      }
     }}]);
   const ins=[0,1,2].map(i=>$('i'+i));
   ins.forEach((el,i)=>{
@@ -902,14 +1068,55 @@ function challengeResult(t,moves){
     el.addEventListener('keydown',e=>{ if(e.key==='Backspace'&&!el.value&&i>0) ins[i-1].focus(); });
   });
 }
-function showRanking(highlightId){
-  const c=challengeInfo(), list=rankingOf(c.key), mine=store.get('mine-'+c.key,[]);
-  const rows=list.slice(0,50).map((r,i)=>`<tr class="${mine.includes(r.id)?'me':''} ${i===0?'top1':''}"><td>${i+1}</td><td class="nm">${r.name}</td><td class="tm">${fmt(r.t)}</td><td class="mv">${r.moves}수</td></tr>`).join('');
-  openModal(`<h2>${c.label} 랭킹</h2><p>시간이 빠른 순 · 같으면 이동 수가 적은 순</p>
-    ${rows?`<table class="rank">${rows}</table>`:'<p style="margin-top:18px">아직 기록이 없어요. 첫 기록의 주인공이 되어보세요!</p>'}
-    <div class="note">미리보기: 서버 연결 전이라 이 기기 기록만 보여요</div>
-    <button class="tiny" id="devReset">(테스트용) 오늘 도전 횟수 초기화</button>`,[{t:'닫기',primary:true}]);
-  $('devReset').onclick=()=>{ const c2=challengeInfo(); c2.used=0; c2.bonus=false; saveAttempts(c2); renderChallengePanel(); updateHomeCh(); $('devReset').textContent='초기화했어요'; };
+async function showRanking(result){
+  openModal('<h2>오늘 랭킹</h2><p>불러오는 중…</p>',[{t:'닫기',primary:true}]);
+  let r;
+  try{ r=await CH.ranking(); }
+  catch(e){ openModal(`<h2>오늘 랭킹</h2><p>${e.message}</p>`,[{t:'닫기',primary:true}]); return; }
+  const rows=r.top.map(x=>`<tr class="${x.me?'me':''} ${x.rank===1?'top1':''}"><td>${x.rank}</td><td class="nm">${x.name}</td><td class="tm">${fmt(x.ms)}</td><td class="mv">${x.moves}수</td></tr>`).join('');
+  const mine=r.me&&!r.top.some(x=>x.me)?`<table class="rank"><tr class="me"><td>${r.me.rank}</td><td class="nm">${r.me.name}</td><td class="tm">${fmt(r.me.ms)}</td><td class="mv">${r.me.moves}수</td></tr></table>`:'';
+  const head=result?(result.improved?`<span class="pill">${result.rank}위 / ${result.total}명</span>`:`<span class="pill">이번 기록은 내 최고 기록보다 느려요 · 지금 ${result.rank}위</span>`):'';
+  openModal(`<h2>${dayLabel(r.day)} 랭킹</h2>${head}<p>시간이 빠른 순 · 같으면 이동 수가 적은 순 · ${r.total}명 참여</p>
+    ${rows?`<table class="rank">${rows}</table>${mine}`:'<p style="margin-top:18px">아직 기록이 없어요. 첫 기록의 주인공이 되어보세요!</p>'}
+    ${SERVER?'':'<div class="note">미리보기: 서버 연결 전이라 이 기기 기록만 보여요</div><button class="tiny" id="devReset">(테스트용) 오늘 도전 횟수 초기화</button>'}`,[{t:'닫기',primary:true}]);
+  if(!SERVER) $('devReset').onclick=()=>{ store.set('ch-'+kstDate(),{used:0,bonus:false}); refreshCh(); $('devReset').textContent='초기화했어요'; };
+}
+function challengeBonus(){
+  if(!chStatus||chStatus.error||chStatus.bonus) return;
+  showRewarded('challenge',async()=>{
+    try{ chStatus=await CH.bonus(); chStatus.no=chStatus.no||dayNo(chStatus.day); renderChallengePanel(); updateHomeCh(); toast('도전 1회를 받았어요! 다시 도전해 보세요'); }
+    catch(e){ toast(e.message,{info:true}); }
+  });
+}
+
+// ---------- 앱 전용: 뒤로가기·진동·링크 ----------
+function appHaptic(kind){
+  if(!NATIVE) return;
+  try{
+    if(kind==='turn') NATIVE.Haptics.impact({style:NATIVE.ImpactStyle.Light});
+    else NATIVE.Haptics.notification({type:NATIVE.NotificationType.Success});
+  }catch(e){}
+}
+function onAndroidBack(){
+  if($('modal').classList.contains('show')){ closeModal(); return; }
+  if($('menu').classList.contains('show')){ closeMenu(); return; }
+  if($('guide').classList.contains('show')){ closeGuide(); return; }
+  if($('app').classList.contains('show')){ onBack(); return; }
+  NATIVE.App.minimizeApp().catch(()=>{});
+}
+function openSitePage(page){
+  const url=(CFG.SITE||'https://every-cube.ohsangplay.com/')+page;
+  if(NATIVE) NATIVE.Browser.open({url}).catch(()=>{}); else window.open(url,'_blank');
+}
+function bootApp(){
+  if(!SERVER) $('homeFoot').style.display='none';
+  document.querySelectorAll('[data-page]').forEach(a=>a.addEventListener('click',e=>{ e.preventDefault(); openSitePage(a.dataset.page); }));
+  if(!NATIVE) return;
+  document.body.classList.add('in-app');
+  try{ NATIVE.StatusBar.hide().catch(()=>{}); }catch(e){}
+  NATIVE.App.addListener('backButton',onAndroidBack);
+  NATIVE.App.addListener('resume',()=>{ if(!$('app').classList.contains('show')||mode==='challenge') refreshCh(); });
+  startAppAds();
 }
 
 // ---------- 공략 가이드 ----------
@@ -1005,7 +1212,7 @@ function enterMode(m){
 function goHome(){
   closeMenu(); closeGuide(); closeModal(); resetIntro(); clearInterval(cdTimer); $('countdown').classList.remove('show'); pendingGuide=false;
   $('app').classList.remove('show'); $('home').classList.add('show');
-  build(3); updateHomeCh();
+  build(3); updateHomeCh(); refreshCh();
 }
 function onBack(){
   if(mode==='challenge'&&state==='running'){ giveUp(goHome); return; }
@@ -1037,7 +1244,7 @@ $('btnGiveUp').onclick=()=>{ if(state==='running') giveUp(); };
 
 $('btnChStart').onclick=startChallenge;
 $('btnChRank').onclick=()=>showRanking();
-$('btnChAd').onclick=()=>{ const c=challengeInfo(); if(c.bonus) return; fakeAd(()=>{ c.bonus=true; saveAttempts(c); renderChallengePanel(); }); };
+$('btnChAd').onclick=challengeBonus;
 window.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT') return;
   if((e.ctrlKey||e.metaKey)&&e.key==='z'){ e.preventDefault(); undo(); }
@@ -1051,7 +1258,7 @@ function loop(now){
   renderer.render(scene,camera);
   requestAnimationFrame(loop);
 }
-build(3); resize(); updateHomeCh();
+build(3); resize(); updateHomeCh(); refreshCh(); bootApp();
 window.__ttc={cd:c=>centerDir(c),yc:()=>yellowCenterDir(),undo:()=>undo(),hist:()=>history.length,move:m=>{ history.push(m); queue.push({...m,kind:'user'}); },plan:()=>makePlan(),hs:()=>hs,busy:()=>busy()};
 requestAnimationFrame(loop);
 })();

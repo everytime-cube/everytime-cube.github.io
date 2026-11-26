@@ -1,0 +1,21 @@
+{
+  "appId": "com.ohsang.play.cube",
+  "appName": "틈틈이 큐브",
+  "webDir": "www",
+  "backgroundColor": "#13151b",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#13151b",
+    "scrollEnabled": false,
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "android": {
+    "backgroundColor": "#13151b"
+  },
+  "plugins": {
+    "AdMob": {},
+    "StatusBar": {
+      "overlaysWebView": true
+    }
+  }
+}

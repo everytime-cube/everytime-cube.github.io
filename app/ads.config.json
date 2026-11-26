@@ -1,0 +1,15 @@
+{
+  "_comment": "AdMob 광고 ID. 기본값은 구글 공식 테스트 ID. 실제 ID는 저장소 Variables(ADMOB_{IOS|ANDROID}_APP_ID, _BANNER_ID, _REWARDED_ID, _REWARDED_CHALLENGE_ID)로 넣으면 빌드 때 덮어쓴다. 배너가 실제 ID인데 보상형 ID가 없으면 보상형은 끈다(실제 앱에 테스트 광고가 나가지 않게). 챌린지용 보상형이 없으면 힌트용 보상형을 같이 쓴다.",
+  "ios": {
+    "appId": "ca-app-pub-3940256099942544~1458002511",
+    "banner": "ca-app-pub-3940256099942544/2934735716",
+    "rewarded": "ca-app-pub-3940256099942544/1712485313",
+    "rewardedChallenge": ""
+  },
+  "android": {
+    "appId": "ca-app-pub-3940256099942544~3347511713",
+    "banner": "ca-app-pub-3940256099942544/6300978111",
+    "rewarded": "ca-app-pub-3940256099942544/5224354917",
+    "rewardedChallenge": ""
+  }
+}

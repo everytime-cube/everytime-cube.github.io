@@ -184,7 +184,7 @@ header{position:relative}
   <div class="tagline">짬 날 때 한 판, 손으로 돌리는 3D 큐브</div>
   <div class="modes">
     <button class="mode" data-mode="tutorial"><span class="ic">📖</span><span><b>튜토리얼</b><small>처음이라면 여기서! 7단계 공략과<br>조각 단위 힌트로 배워요</small></span></button>
-    <button class="mode" data-mode="normal"><span class="ic">🧊</span><span><b>일반</b><small>2×2 ~ 5×5 자유롭게 · 3×3은 힌트 3개</small></span></button>
+    <button class="mode" data-mode="normal"><span class="ic">🧊</span><span><b>일반</b><small>2×2 ~ 5×5 자유롭게 · 2×2·3×3은 힌트 3개</small></span></button>
     <button class="mode ch" data-mode="challenge"><span class="ic">🏆</span><span><b>오늘의 챌린지</b><small id="homeCh">모두 같은 큐브 · 하루 한 번 · 도움 없이</small></span><span class="tag" id="homeChTag">도전 1</span></button>
   </div>
   <button class="linkbtn" id="btnRankHome">오늘 랭킹 보기 →</button>
@@ -465,8 +465,10 @@ function reorientMove(){
   return rotateToUp('U');
 }
 // 해당 색 센터를 맨 위(+y)로 올리는 큐브 전체 회전
-function rotateToUp(color){
-  const n=centerDir(color); if(!n||n.y>0.5) return null;
+function rotateToUp(color){ return rotateVecToUp(centerDir(color)); }
+// 이 방향(바깥을 보는 면)을 맨 위(+y)로 올리는 큐브 전체 회전
+function rotateVecToUp(n){
+  if(!n||n.y>0.5) return null;
   if(n.y<-0.5) return {axis:'x',layer:'all',dir:2};
   const a=new THREE.Vector3().crossVectors(n,new THREE.Vector3(0,1,0));
   const ax=AXES.find(k=>Math.abs(a[k])>0.5);
@@ -671,25 +673,26 @@ canvas.addEventListener('pointercancel',e=>{ if(drag&&e.pointerId===drag.id){ dr
 
 // ---------- 조각 단위 힌트 ----------
 function engineState(){
-  const st=[], v=new THREE.Vector3();
+  const st=[], v=new THREE.Vector3(), k=N===2?2:1;
   for(const c of cubies) for(const s of c.children){
     if(!s.userData.sticker) continue;
     v.copy(s.userData.normal).applyQuaternion(c.quaternion);
-    st.push({p:[Math.round(c.position.x),Math.round(c.position.y),Math.round(c.position.z)],n:[Math.round(v.x),Math.round(v.y),Math.round(v.z)],c:s.userData.color});
+    st.push({p:[Math.round(c.position.x*k),Math.round(c.position.y*k),Math.round(c.position.z*k)],n:[Math.round(v.x),Math.round(v.y),Math.round(v.z)],c:s.userData.color});
   }
   return st;
 }
-const toUI=m=>({axis:AXES[m.ax],layer:m.layer,dir:m.q===3?-1:m.q});
+const toUI=m=>({axis:AXES[m.ax],layer:N===2?m.layer/2:m.layer,dir:m.q===3?-1:m.q});
 const qOf=d=>((d%4)+4)%4;
 function makePlan(){
   const cam=camera.position, st=engineState();
+  if(N===2){ const p2=HintEngine2.plan(st); if(!p2) return null; return {stage:p2.stage,size:2,showUp:p2.showUp,label:p2.label,moves:p2.moves.map(toUI),idx:0}; }
   // 튜토리얼은 흰색 기준(공략과 동일), 일반은 지금 가장 많이 맞춘 색을 기준으로
   const base=mode==='tutorial'?'D':HintEngine.bestBase(st);
   const p=HintEngine.plan(st,[cam.x,cam.y,cam.z],base);
   if(!p) return null;
   return {stage:p.stage,base,label:p.label,moves:p.moves.map(toUI),idx:0};
 }
-function hintAvailable(){ return N===3 && (mode==='tutorial'||mode==='normal'); }
+function hintAvailable(){ return (N===3&&(mode==='tutorial'||mode==='normal'))||(N===2&&mode==='normal'); }
 function updateHintBtn(){
   const b=$('btnHint'), badge=$('hintBadge');
   b.classList.toggle('off',!hintAvailable());
@@ -707,7 +710,18 @@ function onHintBtn(){
 }
 function startHint(oriented){
   if(hs) stopHint();
-  if(mode==='normal'&&!oriented){
+  if(mode==='normal'&&!oriented&&N===2){
+    // 2×2: 1단계는 흰 면, 그 뒤는 노란 면이 위로 오게 돌린 뒤 힌트
+    const p0=makePlan();
+    const r=p0&&p0.showUp?rotateVecToUp(new THREE.Vector3(p0.showUp[0],p0.showUp[1],p0.showUp[2])):null;
+    resetViewSmooth();
+    if(r){
+      toast('보기 쉽게 '+(p0.stage===1?'흰':'노란')+' 면을 위로 돌릴게요',{info:true,ms:1600});
+      queue.push({...r,kind:'whole',record:true,solo:true,hintAfter:true,dur:450});
+      return;
+    }
+  }
+  if(mode==='normal'&&!oriented&&N===3){
     const st=engineState(), base=HintEngine.bestBase(st), stg=HintEngine.stageOf(st,base);
     const upColor=stg<=2?base:HintEngine.OPP[base];
     const r=rotateToUp(upColor);
@@ -750,7 +764,7 @@ function showHintStep(){
   selectLayer(m.axis,m.layer);
   const how=Math.abs(m.dir)===2?'반 바퀴(180°)':'흔들리는 방향으로 한 칸';
   $('status').textContent='';
-  hintToast('🔍 '+(mode==='normal'?'['+HintEngine.stageName(hs.stage,hs.base)+'] ':'')+hs.label+' · '+(hs.idx+1)+'/'+hs.moves.length+'수 — 표시된 줄을 '+how);
+  hintToast('🔍 '+(mode==='normal'?'['+(hs.size===2?HintEngine2.STAGE_NAME[hs.stage]:HintEngine.stageName(hs.stage,hs.base))+'] ':'')+hs.label+' · '+(hs.idx+1)+'/'+hs.moves.length+'수 — 표시된 줄을 '+how);
   cancelNudge();
   const amp=Math.sign(m.dir)*0.42;
   queue.push({kind:'nudge',axis:m.axis,layer:m.layer,amp},{kind:'nudge',axis:m.axis,layer:m.layer,amp});

@@ -6,7 +6,7 @@ import pathlib
 d = pathlib.Path(__file__).parent
 root = d.parent
 s = (d / 'src.html').read_text(encoding='utf-8')
-s = s.replace('/*ENGINE*/', (d / 'hint-engine.js').read_text(encoding='utf-8'))
+s = s.replace('/*ENGINE*/', (d / 'hint-engine.js').read_text(encoding='utf-8') + '\n' + (d / 'hint-engine2.js').read_text(encoding='utf-8'))
 s = s.replace('/*GUIDE*/', (d / 'guide.js').read_text(encoding='utf-8'))
 CDN = '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>'
 assert '<!--CONFIG-->' in s and CDN in s

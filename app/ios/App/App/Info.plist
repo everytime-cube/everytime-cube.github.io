@@ -65,6 +65,8 @@
 	<false/>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>허용하면 관심 있을 만한 광고가 나와요. 허용하지 않아도 큐브는 똑같이 즐길 수 있어요.</string>
+	<key>GADDelayAppMeasurementInit</key>
+	<true/>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-3940256099942544~1458002511</string>
 	<key>SKAdNetworkItems</key>

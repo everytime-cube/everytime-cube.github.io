@@ -855,21 +855,26 @@ function showRewarded(kind,onReward){
   handles.push(AdMob.addListener(E.FailedToShow,done));
   AdMob.showRewardVideoAd().then(()=>{ rewarded=true; },()=>done());
 }
-async function askTracking(){
+// iOS: 앱이 뜨자마자 네이티브(SceneDelegate)가 추적 허용을 묻는다. 여기서는 답이 나올 때까지 기다렸다가 광고를 시작한다.
+async function waitTracking(){
   if(NATIVE.platform!=='ios') return;
-  let status='notDetermined';
-  try{ ({status}=await NATIVE.AdMob.trackingAuthorizationStatus()); }catch(e){ return; }
-  if(status!=='notDetermined') return;
-  await new Promise(res=>openModal('<h2>광고 안내</h2><p>틈틈이 큐브는 광고로 무료로 운영돼요.<br>다음 화면에서 허용하면 관심 있을 만한 광고가 나와요. 허용하지 않아도 게임은 똑같이 할 수 있어요.</p>',[{t:'계속',primary:true,fn:res}]));
-  await NATIVE.AdMob.requestTrackingAuthorization().catch(()=>{});
+  for(let i=0;;i++){
+    let status='notDetermined';
+    try{ ({status}=await NATIVE.AdMob.trackingAuthorizationStatus()); }catch(e){ return; }
+    if(status!=='notDetermined') return;
+    // 네이티브 요청이 안 떴을 때를 대비해 3초 뒤 한 번 더 직접 요청
+    if(i===10) NATIVE.AdMob.requestTrackingAuthorization().catch(()=>{});
+    await new Promise(r=>setTimeout(r,300));
+  }
 }
 async function startAppAds(){
   const {AdMob}=NATIVE;
+  // 추적 허용 답을 받기 전에는 광고 SDK를 아무것도 하지 않는다 (동의 확인도 그 뒤에)
+  await waitTracking();
   try{
     const info=await AdMob.requestConsentInfo();
     if(info.isConsentFormAvailable&&info.status==='REQUIRED') await AdMob.showConsentForm();
   }catch(e){}
-  await askTracking();
   try{ await AdMob.initialize({initializeForTesting:NATIVE.ads.testing}); }catch(e){ return; }
   adState.ready=true;
   if(NATIVE.ads.banner){
